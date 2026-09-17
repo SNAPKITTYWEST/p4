@@ -1,0 +1,40 @@
+# Build
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.lib
+*.dll
+*.metallib
+*.air
+*.ptx
+*.cubin
+*.fatbin
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Mojo
+__pycache__/
+*.mojopkg
+
+# Crystal
+lib/
+.shards/
+shard.lock
+
+# CUDA
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
