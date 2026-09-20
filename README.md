@@ -40,9 +40,9 @@
 
 ## What is this?
 
-P4 is a hand-rolled, low-level GPU compute stack that exposes native Apple Metal and NVIDIA CUDA kernels through a unified FFI architecture. Every kernel is hand-written. Every interface is explicit. Nothing is delegated to a framework.
+P4 is a hand-rolled, low-level compute stack with two complementary subsystems that work at opposite ends of the hardware abstraction: a GPU compute layer that runs kernels directly on Apple Metal and NVIDIA CUDA hardware, and a hardware model layer called Switchboard that formally describes the digital circuits those kernels ultimately execute on — from VHDL behavioural description down through CMOS transistor netlists, SPICE decks, and IEEE std_logic simulation.
 
-Six layers, one stable C ABI boundary between them:
+The GPU compute layer exposes native Metal and CUDA kernels through a unified FFI architecture. Every kernel is hand-written. Every interface is explicit. Nothing is delegated to a framework. Six layers, one stable C ABI boundary between them:
 
 - **ABI** — Stable C types, opaque handles, kernel IDs. The line that nothing crosses except plain C.
 - **Apple Metal** — Objective-C FFI to Metal runtime. Hand-written MSL kernels. No MPS. No MetalKit.
@@ -51,7 +51,7 @@ Six layers, one stable C ABI boundary between them:
 - **Crystal** — Systems orchestration. Process lifecycle, kernel registry, device discovery, job routing.
 - **CPU Reference** — Scalar reference implementations for every kernel. Verification oracle.
 
-And now a seventh: **Switchboard** — a five-phase Swift structural hardware model that takes the 4-bit ripple-carry datapath from VHDL description all the way through CMOS transistor netlists, SPICE decks, executable MetaShard graphs, IEEE std_logic simulation, VCD waveforms, SPICE PWL stimulus, and a canonical IR with equivalence closure witnesses. Described in full below.
+Switchboard is the seventh layer, working from the opposite direction. Where the GPU stack abstracts away from hardware, Switchboard descends toward it — taking a 4-bit ripple-carry datapath from a VHDL description through five lowering phases: Swift structural model, CMOS transistor netlist, SPICE deck, executable MetaShard graph with delta-cycle simulation, IEEE std_logic waveforms and PWL stimulus, and a canonical IR with machine-checkable equivalence closure witnesses. The result is a formal account of the hardware that the GPU kernels run on.
 
 15 constraints enforced. No cloud GPU dependency. No SaaS inference. No mandatory Python runtime. No silent backend fallback. Explicit failure on unsupported capabilities.
 
@@ -99,14 +99,6 @@ flowchart TD
         REF[Scalar Reference]
     end
 
-    subgraph "Switchboard HDL Layer"
-        SW1[Swift Structural Model]
-        SW2[CMOS / SPICE]
-        SW3[MetaShard Fabric]
-        SW4[HDL Runtime]
-        SW5[Canonical IR]
-    end
-
     APP --> CR1 & CR2
     CR1 & CR4 --> MJ1 & MJ4
     MJ4 --> ABI
@@ -115,7 +107,20 @@ flowchart TD
     ABI --> REF
     AM1 --> AM2 --> AM3
     NC1 --> NC2 --> NC3
-    SW1 --> SW2 --> SW3 --> SW4 --> SW5
+```
+
+## Switchboard — Hardware Lowering Stack
+
+```mermaid
+flowchart TD
+    VHDL([VHDL Behavioural Description])
+    P1[Phase I — Swift Structural Model\nFour-state logic · FSM · InvariantFirewall]
+    P2[Phase II — CMOS / SPICE Lowering\nMOSDevice · CMOSBuilder · SPICE subcircuit]
+    P3[Phase III — MetaShard Fabric\nMetaShardGraph DAG · Merkle commitment]
+    P4[Phase IV — HDL Runtime / Waveform\nStdLogic 9-value · VCD · PWL stimulus]
+    P5[Phase V — Canonical IR\nCanonicalSwitchboardIR · EquivalenceWitness]
+
+    VHDL --> P1 --> P2 --> P3 --> P4 --> P5
 ```
 
 ## Kernel Dispatch Pipeline
@@ -331,47 +336,9 @@ swiftc apple/swift/switchboard/Switchboard.swift \
 
 ---
 
----
+## Switchboard
 
-# Switchboard — Swift HDL Layer
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   VHDL description                                                          │
-│        │                                                                    │
-│        ▼                                                                    │
-│   Swift structural machine          ◄── Phase I                             │
-│        │                                                                    │
-│        ▼                                                                    │
-│   CMOS gate graph / transistor netlist  ◄── Phase II                        │
-│        │                                                                    │
-│        ▼                                                                    │
-│   SPICE subcircuit                  ◄── Phase II                            │
-│        │                                                                    │
-│        ▼                                                                    │
-│   MetaShard execution graph         ◄── Phase III                           │
-│        │                                                                    │
-│        ▼                                                                    │
-│   Delta-cycle deterministic scheduler  ◄── Phase III                        │
-│        │                                                                    │
-│        ▼                                                                    │
-│   IEEE std_logic resolution         ◄── Phase IV                            │
-│        │                                                                    │
-│        ▼                                                                    │
-│   VCD waveform / SPICE PWL stimulus ◄── Phase IV                            │
-│        │                                                                    │
-│        ▼                                                                    │
-│   Canonical IR + equivalence closure  ◄── Phase V                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-Switchboard is a pure-Swift, zero-dependency implementation of a complete hardware description and verification pipeline. It starts from the same datapath that would appear in a synthesisable VHDL design — a 4-bit ripple-carry adder with a three-state FSM and tri-state output bus — and carries that description through five distinct lowering phases until it reaches a canonical intermediate representation with machine-checkable equivalence witnesses.
-
-No Apple frameworks are imported beyond `Foundation` for the type system anchor. No LLVM intrinsics. No assembly. Every data structure is explicit and every algorithm is written out by hand in a style that prioritises transparent structural semantics over cleverness. The result is a pipeline in which every boundary is testable, every invariant is named, and every lowering step can be audited without a toolchain.
-
-The five phases are not stubs or sketches. Each one is a complete implementation of the layer it represents.
+Switchboard is a pure-Swift, zero-dependency implementation of a complete hardware description and verification pipeline. It starts from the same datapath that would appear in a synthesisable VHDL design — a 4-bit ripple-carry adder with a three-state FSM and tri-state output bus — and carries that description through five distinct lowering phases until it reaches a canonical intermediate representation with machine-checkable equivalence witnesses. No Apple frameworks are imported beyond `Foundation`. No LLVM intrinsics. No assembly. Every data structure is explicit and every algorithm is written out by hand in a style that prioritises transparent structural semantics over cleverness.
 
 ---
 
