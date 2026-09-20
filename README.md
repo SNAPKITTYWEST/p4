@@ -914,31 +914,6 @@ flowchart LR
     SUM_OR --> S([S])
     OR_COUT --> COUT([COUT])
 ```
-
----
-
-## Switchboard — Ripple Carry Chain
-
-```mermaid
-flowchart LR
-    A0([A[0]]) & B0([B[0]]) --> FA0
-    GND([VSS / 0]) -->|CIN=0| FA0
-    FA0 -->|S[0]| SUM0([S[0]])
-    FA0 -->|C0| FA1
-
-    A1([A[1]]) & B1([B[1]]) --> FA1
-    FA1 -->|S[1]| SUM1([S[1]])
-    FA1 -->|C1| FA2
-
-    A2([A[2]]) & B2([B[2]]) --> FA2
-    FA2 -->|S[2]| SUM2([S[2]])
-    FA2 -->|C2| FA3
-
-    A3([A[3]]) & B3([B[3]]) --> FA3
-    FA3 -->|S[3]| SUM3([S[3]])
-    FA3 -->|C3| OVF([OVERFLOW])
-```
-
 ---
 
 ## Switchboard — Phase IV Simulation Loop
