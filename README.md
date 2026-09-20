@@ -338,17 +338,11 @@ swiftc apple/swift/switchboard/Switchboard.swift \
 
 ## Switchboard
 
-Switchboard is a pure-Swift, zero-dependency implementation of a complete hardware description and verification pipeline. It starts from the same datapath that would appear in a synthesisable VHDL design — a 4-bit ripple-carry adder with a three-state FSM and tri-state output bus — and carries that description through five distinct lowering phases until it reaches a canonical intermediate representation with machine-checkable equivalence witnesses. No Apple frameworks are imported beyond `Foundation`. No LLVM intrinsics. No assembly. Every data structure is explicit and every algorithm is written out by hand in a style that prioritises transparent structural semantics over cleverness.
+Switchboard is a pure-Swift, zero-dependency hardware description and verification pipeline. It starts from a 4-bit ripple-carry adder with a three-state FSM and tri-state output bus — the same form as a synthesisable VHDL design — and carries that description through five lowering phases until it reaches a canonical IR with machine-checkable equivalence witnesses.
 
----
+The GPU compute stack knows about thread topology and memory bandwidth. It does not know about logic families, transistor sizing, carry propagation delay, or clock domain crossing. Switchboard fills that gap from the opposite direction: starting from a VHDL behavioural description and descending through gates, transistors, SPICE netlists, and simulation semantics until it reaches a representation formally comparable to the behavioural original.
 
-## Switchboard — Why It Exists
-
-The GPU compute stack in P4 is a software system. It has a stable ABI, a kernel registry, and explicit verification against reference implementations. What it does not have, by design, is a formal account of the hardware it runs on. The kernels know about thread topology and memory bandwidth. They do not know about logic families, transistor sizing, carry propagation delay, or clock domain crossing.
-
-Switchboard is the layer that fills that gap from the opposite direction. Rather than starting from silicon and climbing up, it starts from a VHDL-style behavioural description and descends — through gates, through transistors, through SPICE netlists, through simulation semantics — until it reaches a representation that can be formally compared against the behavioural original.
-
-The immediate substrate is a 4-bit ripple-carry adder. That choice is deliberate. The full adder is small enough to fit entirely in the reader's head, well-understood enough that its truth table needs no explanation, but structurally rich enough to exercise every mechanism: carry propagation, state machines, tri-state buses, multi-driver resolution, setup and hold timing, SPICE PWL stimulus generation, and Merkle commitment of execution traces. When all five phases work correctly on the full adder, the architecture is proven and the same pipeline can be applied to any combinational or sequential design.
+No Apple frameworks beyond `Foundation`. No LLVM intrinsics. No assembly. Every boundary is testable, every invariant is named, every lowering step can be audited without a toolchain.
 
 ---
 
@@ -358,82 +352,32 @@ The immediate substrate is a 4-bit ripple-carry adder. That choice is deliberate
 flowchart TD
     VHDL([VHDL Behavioural Description])
 
-    subgraph "Phase I — Swift Structural Model"
-        P1A[Four-State Logic\n0 / 1 / X / Z]
-        P1B[LogicBus — fixed width bus]
-        P1C[FullAdder primitive]
-        P1D[RippleAdder4 — four-cell chain]
-        P1E[SwitchboardState FSM\nIDLE → READ → WRITE]
-        P1F[InvariantFirewall\nI2 / I3 / I4 / I5 / I6]
-        P1G[Switchboard machine]
-        P1H[StructuralNetlist]
-        P1I[MetaShard projection]
-        P1J[SPICE circuit IR]
-    end
+    P1["Phase I — Swift Structural Model
+    Four-state logic · LogicBus · FullAdder
+    RippleAdder4 · FSM · InvariantFirewall
+    StructuralNetlist · MetaShard projection"]
 
-    subgraph "Phase II — CMOS / SPICE Lowering"
-        P2A[MOSDevice — NMOS / PMOS]
-        P2B[PhysicalCell]
-        P2C[CMOSBuilder\nINV / NAND2 / AND2 / NOR2 / OR2 / XOR2]
-        P2D[CMOSFullAdder.build]
-        P2E[PhysicalFirewall]
-        P2F[PhysicalSPICELowering]
-        P2G[SwitchboardSPICEDeck]
-        P2H[CMOSLogicalEquivalence]
-    end
+    P2["Phase II — CMOS / SPICE Lowering
+    MOSDevice · CMOSBuilder gates
+    PhysicalFirewall · SPICE subcircuit
+    Logical equivalence check"]
 
-    subgraph "Phase III — MetaShard Fabric"
-        P3A[ByteBuffer + Digest256]
-        P3B[DigestEngine — 256-bit]
-        P3C[MetaShardGraph — DAG]
-        P3D[MetaShardMerkle — root]
-        P3E[RuntimeStore + EventQueue]
-        P3F[ScheduledEvent — delta-cycle]
-        P3G[RuntimeOperation protocol]
-        P3H[DatapathOperation / FSMDecodeOperation\nEnableOperation / OutputGateOperation\nOverflowOperation / SequentialStateOperation]
-    end
+    P3["Phase III — MetaShard Fabric
+    ByteBuffer · Digest256 · MetaShardGraph
+    Merkle root · RuntimeStore · EventQueue
+    Delta-cycle RuntimeOperation pipeline"]
 
-    subgraph "Phase IV — HDL Runtime / Waveform"
-        P4A[StdLogic — 9-value]
-        P4B[StdLogicResolver — pair resolution]
-        P4C[ResolvedNet + ResolvedVectorNet]
-        P4D[DelayQueue — inertial / transport]
-        P4E[HDLTime — femtosecond + delta]
-        P4F[ClockGenerator]
-        P4G[TimingMonitor — setup / hold]
-        P4H[VCDSerializer]
-        P4I[SPICEPWLGenerator]
-        P4J[TransitionHistory]
-    end
+    P4["Phase IV — HDL Runtime / Waveform
+    StdLogic 9-value · StdLogicResolver
+    DelayQueue inertial/transport · ClockGenerator
+    TimingMonitor · VCDSerializer · PWL stimulus"]
 
-    subgraph "Phase V — Canonical IR"
-        P5A[CanonicalSwitchboardIR]
-        P5B[CanonicalIRFirewall]
-        P5C[CanonicalTransitionEngine]
-        P5D[CanonicalDatapathExecutor]
-        P5E[CanonicalSwitchboardMachine]
-        P5F[CanonicalIREncoder + Digest256]
-        P5G[EquivalenceWitness]
-        P5H[CanonicalManifest]
-    end
+    P5["Phase V — Canonical IR
+    CanonicalSwitchboardIR · IRFirewall
+    TransitionEngine · DatapathExecutor
+    EquivalenceWitness · CanonicalManifest"]
 
-    VHDL --> P1A
-    P1A & P1B & P1C & P1D --> P1E & P1F & P1G
-    P1G --> P1H & P1I & P1J
-    P1J --> P2A
-    P2A --> P2B --> P2C --> P2D
-    P2D --> P2E --> P2F --> P2G
-    P2G --> P2H
-    P1I --> P3A
-    P3A --> P3B --> P3C --> P3D
-    P3C --> P3E --> P3F --> P3G --> P3H
-    P1A --> P4A
-    P4A --> P4B --> P4C
-    P4C --> P4D --> P4E --> P4F
-    P4F --> P4G --> P4H --> P4I
-    P3H --> P5A
-    P5A --> P5B --> P5C --> P5D --> P5E
-    P5E --> P5F --> P5G --> P5H
+    VHDL --> P1 --> P2 --> P3 --> P4 --> P5
 ```
 
 ---
@@ -841,28 +785,57 @@ The `CanonicalSwitchboardMachine` constructor takes `throws` and calls `Canonica
 
 ---
 
-## Switchboard — Lowering Stack
+## Switchboard — Full Lowering Pipeline
 
 ```mermaid
 flowchart TD
-    LOGIC[Logic — 4 values\n0 / 1 / X / Z] --> STD[StdLogic — 9 values\nU/X/0/1/Z/W/L/H/-]
-    STD --> RES[StdLogicResolver\npair resolution table]
-    RES --> NET[ResolvedNet / ResolvedVectorNet\nmulti-driver nets]
+    VHDL([VHDL]) --> LOGIC
 
-    FA[FullAdder.evaluate] --> REFA[CMOSReferenceLogic.fullAdder\nindependent gate-level]
-    FA & REFA --> EQ[CMOSLogicalEquivalence.verify\n8 binary vectors]
+    subgraph "Phase I"
+        LOGIC[Logic 4-value] --> FA[FullAdder.evaluate]
+        FA --> RIPPLE[RippleAdder4]
+        RIPPLE --> SNAP[SwitchboardSnapshot]
+        SNAP --> FW1[InvariantFirewall]
+        SNAP --> SHARD[MetaShard list]
+        SNAP --> SPICEIR[SPICE circuit IR]
+    end
 
-    CELL[CMOSFullAdder.build\nXOR + AND + OR cells] --> FW[PhysicalFirewall.validate]
-    FW --> SPICE[PhysicalSPICELowering.lower\nMOS M elements]
-    SPICE --> DECK[SwitchboardSPICEDeck.generate\n.subckt + .model + instances]
+    subgraph "Phase II"
+        SPICEIR --> CMOS[CMOSFullAdder.build]
+        FA --> CMOSREF[CMOSReferenceLogic]
+        CMOS --> PFW[PhysicalFirewall]
+        PFW --> LOW[PhysicalSPICELowering]
+        LOW --> DECK[SwitchboardSPICEDeck]
+        FA & CMOSREF --> EQ[CMOSLogicalEquivalence]
+    end
 
-    SHARD[MetaShard list] --> GRAPH[MetaShardGraph DAG]
-    GRAPH --> MERKLE[MetaShardMerkle.root\nDigest256]
-    MERKLE --> ENC[CanonicalIREncoder.digest\nequivalence witness]
+    subgraph "Phase III"
+        SHARD --> GRAPH[MetaShardGraph DAG]
+        GRAPH --> MERKLE[MetaShardMerkle root]
+        GRAPH --> STORE[RuntimeStore + EventQueue]
+        STORE --> OPS[RuntimeOperation pipeline]
+    end
 
-    IR[CanonicalSwitchboardIR] --> FW5[CanonicalIRFirewall.verify\n7 passes]
-    FW5 --> MACHINE[CanonicalSwitchboardMachine\nexecutable from IR]
-    MACHINE --> MANIFEST[CanonicalManifest\nproofs + digest]
+    subgraph "Phase IV"
+        LOGIC --> STD[StdLogic 9-value]
+        STD --> RES[StdLogicResolver]
+        RES --> NETS[ResolvedNet / Bus]
+        NETS --> DQ[DelayQueue]
+        DQ --> CLK[ClockGenerator]
+        CLK --> TM[TimingMonitor]
+        TM --> VCD[VCDSerializer]
+        TM --> PWL[SPICEPWLGenerator]
+    end
+
+    subgraph "Phase V"
+        OPS --> IR[CanonicalSwitchboardIR]
+        DECK --> IR
+        MERKLE --> IR
+        IR --> IRFW[CanonicalIRFirewall]
+        IRFW --> CMACH[CanonicalSwitchboardMachine]
+        CMACH --> WIT[EquivalenceWitness]
+        WIT --> MANIFEST[CanonicalManifest]
+    end
 ```
 
 ---
